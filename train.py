@@ -3,6 +3,7 @@ import argparse
 import tensorflow as tf
 import keras.backend as K
 from model import SimGAN
+from ImageBuffer import ImageBuffer
 from keras.optimizers import Adam, SGD
 from keras.callback import ReduceLROnPlateau, ModelCheckpoint
 

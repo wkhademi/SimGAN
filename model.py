@@ -15,7 +15,7 @@ class SimGAN:
 
         # build discriminator network
         self.discriminator = self.discriminator_network(input_shape)
-        self.discriminator.compile(loss='binary_crossentropy', optimizer=optimizer)
+        self.discriminator.compile(loss='categorical_crossentropy', optimizer=optimizer)
 
         # disable training for discriminator when training refiner
         self.discriminator.trainable = False
@@ -32,7 +32,7 @@ class SimGAN:
         # build adversarial network
         self.adversarial = Model(inputs=inputs, outputs=[refined_inputs, refined_probs],
                                  name='adversarial_model')
-        self.adversarial.compile(loss=[self.self_regularization_loss, 'binary_crossentropy'],
+        self.adversarial.compile(loss=[self.self_regularization_loss, 'categorical_crossentropy'],
                                  optimizer=optimizer)
 
 
@@ -68,14 +68,14 @@ class SimGAN:
         Discriminator network of SimGAN meant for images of input size 224x224.
         """
         inputs = Input(shape=discriminator_input_shape)
+        
         net = Conv2D(96, 7, strides=4, padding='same', activation='relu')(inputs)
         net = Conv2D(64, 5, strides=2, padding='same', activation='relu')(net)
         net = MaxPool2D(pool_size=3, strides=2, padding='same')(net)
         net = Conv2D(32, 3, strides=2, padding='same', activation='relu')(net)
         net = Conv2D(32, 1, strides=1, activation='relu')(net)
 
-        # original paper outputs 2 feature maps and applies softmax
-        output_map = Conv2D(1, 1, strides=1, activation='sigmoid')(net)
+        output_map = Conv2D(2, 1, strides=1, activation='softmax')(net)
 
         return Model(inputs=inputs, outputs=output_map, name='discriminator')
 
