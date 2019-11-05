@@ -5,7 +5,6 @@ import keras.backend as K
 from model import SimGAN
 from ImageBuffer import ImageBuffer
 from keras.optimizers import Adam, SGD
-from keras.callback import ReduceLROnPlateau, ModelCheckpoint
 
 
 config = tf.ConfigProto()
@@ -88,10 +87,14 @@ def train():
             refiner_inputs, _ = next(synth_crops)
             refiner_loss = sim_gan.refiner.train_on_batch(refiner_inputs, y=refiner_inputs)
 
+            print('Step {} - Refiner loss: {}'.format(i, refiner_loss))
+
             # save refiner model weights every 25 steps
             if i % 25 == 0:
+                print('Saving weights of refiner model...')
                 sim_gan.refiner.save_weights(weights_path+'refiner.latest.hdf5', save_format='h5')
     else:
+        print('Loading in weights for refiner model...')
         sim_gan.refiner.load_weights(args.refiner_model_path)
 
     if not args.discriminator_model_path:
@@ -101,34 +104,62 @@ def train():
             real_inputs, _ = next(real_crops)
             discrim_real_loss = sim_gan.discriminator.train_on_batch(real_inputs, y=real_labels)
 
+            print('Step {} - Discriminator loss w/ real images: {}'.format(i, discrim_real_loss))
+
+            # train discriminator on batch of refined images
+            refiner_inputs, _ = next(synth_crops)
+            refined_inputs = sim_gan.refiner.predict_on_batch(refiner_inputs)
+            discrim_refined_loss = sim_gan.discriminator.train_on_batch(refined_inputs, y=synth_labels)
+
+            print('Step {} - Discriminator loss w/ refined images: {}'.format(i, discrim_refined_loss))
+
+            # save discriminator model weights every 25 steps
+            if i % 25 == 0:
+                print('Saving weights of discriminator model...')
+                sim_gan.discriminator.save_weights(weights_path+'discriminator.latest.hdf5', save_format='h5')
+    else:
+        print('Loading in weights for discriminator model...')
+        sim_gan.discriminator.load_weights(args.discriminator_model_path)
+
+    # training procedure defined in Algorithm 1
+    for step in range(args.max_steps):
+        for i in range(args.k_g):
+            refiner_inputs, _ = next(synth_crops)
+            adversarial_loss = sim_gan.adversarial.train_on_batch(refiner_inputs, y=[refiner_inputs, real_labels])
+
+            print('Step {} - Adversarial loss: {}'.format(args.k_g*step+i, adversarial_loss))
+
+        for i in range(args.k_d):
+            # train discriminator on batch of real images
+            real_inputs, _ = next(real_crops)
+            discrim_real_loss = sim_gan.discriminator.train_on_batch(real_inputs, y=real_labels)
+
+            print('Step {} - Discriminator loss w/ real images: {}'.format(args.k_d*step+i, discrim_real_loss))
+
             # train discriminator on batch of refined images
             refiner_inputs, _ = next(synth_crops)
 
             # only mix in old refined images when buffer has filled up
             if len(image_buffer) == args.buffersize:
-                refined_inputs = None
+                old_refined_inputs = image_buffer.fetch(args.batch_size//2)
+                indices = random.sample(range(0, args.batch_size), arg.batch_size//2)
+                mixed_refined_inputs = np.concatenate(old_refined_inputs, refiner_inputs[indices])
+                refined_inputs = sim_gan.refiner.predict_on_batch(mixed_refiner_inputs)
             else:
                 refined_inputs = sim_gan.refiner.predict_on_batch(refiner_inputs)
 
             discrim_refined_loss = sim_gan.discriminator.train_on_batch(refined_inputs, y=synth_labels)
 
+            print('Step {} - Discriminator loss w/ refined images: {}'.format(i, discrim_refined_loss))
+
             # update image buffer with the newly refined images
             image_buffer.update(refined_inputs)
 
-            # save discriminator model weights every 25 steps
-            if i % 25 == 0:
-                sim_gan.discriminator.save_weights(weights_path+'discriminator.latest.hdf5', save_format='h5')
-    else:
-        sim_gan.discriminator.load_weights(args.discriminator_model_path)
-
-    # training procedure defined in Algorithm 1
-    for step in range(args.max_steps):
-        for _ in range(args.k_g):
-            pass
-
-        for _ in range(args.k_d):
-            pass
-
+        # save discriminator and refiner weights every 25 steps
+        if step % 25 == 0:
+            print('Saving weights of refiner and discriminator model...')
+            sim_gan.refiner.save_weights(weights_path+'discriminator.latest.hdf5', save_format='h5')
+            sim_gan.discriminator.save_weights(weights_path+'refiner.latest.hdf5', save_format='h5')
 
 if __name__ == '__main__':
     train()
