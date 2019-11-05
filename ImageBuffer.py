@@ -7,6 +7,9 @@ class ImageBuffer:
         self.buffersize = buffersize
         self.index = 0
 
+    def __len__(self):
+        return len(self.buffer)
+
     def fetch(batch_size):
         """
         Fetch a batch size worth of images from the buffer
@@ -30,5 +33,6 @@ class ImageBuffer:
         if len(self.buffer) + len(images) <= self.buffersize:
             self.buffer = np.concatenate(self.buffer, images)
         else:  # randomly replace images in buffer with new refined images
-            indices = random.sample(range(0, self.buffersize), len(images))
-            self.buffer = np.put(self.buffer, indices, images)
+            indices = random.sample(range(0, self.buffersize), len(images)//2)
+            image_indices = random.sample(range(0, len(images)), len(images)//2)
+            self.buffer = np.put(self.buffer, indices, images[image_indices])

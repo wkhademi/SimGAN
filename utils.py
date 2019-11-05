@@ -3,10 +3,11 @@ import numpy as np
 from PIL import Image
 
 
-def load_data(path):
+def load_data(path, include_val=False):
     images = []
+    val_images = []
 
-    im = Image.open(path)
+    im = Image.open(args.path)
     print('%d images'%im.n_frames)
 
     step = im.n_frames//1000
@@ -16,11 +17,20 @@ def load_data(path):
             raise ValueError('trying to access frame %d/%d (step:%d)'%(n,im.n_frames,step))
         im.seek(n)
         n += step
-        images.append(im.crop())
+        if i % 10 == 0:
+            val_images.append(im.crop())
+        else:
+            images.append(im.crop())
 
-    images = np.stack(images)
+        images = np.stack(images)
+        val_images = np.stack(val_images)
 
-    return images
+    if include_val:  # used for loading in the simulated train/val split data
+        return images, val_images
+    else:  # used for loading in the real images
+        images = np.concatenate(images, val_images)
+        val_images = []
+        return images, val_images
 
 
 def random_crop_generator(data, crop_size, batch_size):
