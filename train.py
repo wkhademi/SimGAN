@@ -39,6 +39,20 @@ os.makedirs(expdir,exist_ok=True)
 synthetic_images, val_images = utils.load_data(args.synthetic_path, include_val=True)
 real_images, _ = utils.load_data(args.real_path)
 
+train_mean = np.mean(synthetic_images)
+train_std = np.std(synthetic_images)
+mean_std_path = '%s/meanstd.npz'%(expdir)
+np.savez(mean_std_path,train_mean=train_mean,train_std=train_std)
+
+# standardize simulated data for input to refiner
+synthetic_images = (synthetic_images - train_mean) / train_std
+val_images = (synthetic_images - train_mean) / train_std
+
+# normalize real images to be between -1 and 1 for discriminator
+MAXVAL = 1.
+MINVAL = 0.
+real_images = 2*((real_images - MINVAL) / (MAXVAL - MINVAL)) - 1
+
 if args.augment:  # generate more training data through augmentation
     synthetic_images = utils.augment_images(synthetic_images)
     val_images = utils.augment_images(val_images)
