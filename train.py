@@ -13,6 +13,7 @@ sess = tf.Session(config=config)
 K.set_session(sess)
 
 parser = argparse.ArgumentParser()
+parser.add_argument('name')
 parser.add_argument('--synthetic_path', required=True)
 parser.add_argument('--real_path', required=True)
 parser.add_argument('--refiner_model_path', type=str, default=None)
@@ -36,7 +37,7 @@ expdir = 'experiments/%s'%args.name
 os.makedirs(expdir,exist_ok=True)
 
 # load data in from tif files
-synthetic_images, val_images = utils.load_data(args.synthetic_path, include_val=True)
+synthetic_images, test_images = utils.load_data(args.synthetic_path, include_val=True)
 real_images, _ = utils.load_data(args.real_path)
 
 train_mean = np.mean(synthetic_images)
@@ -46,7 +47,6 @@ np.savez(mean_std_path,train_mean=train_mean,train_std=train_std)
 
 # standardize simulated data for input to refiner
 synthetic_images = (synthetic_images - train_mean) / train_std
-val_images = (synthetic_images - train_mean) / train_std
 
 # normalize real images to be between -1 and 1 for discriminator
 MAXVAL = 1.
@@ -55,11 +55,9 @@ real_images = 2*((real_images - MINVAL) / (MAXVAL - MINVAL)) - 1
 
 if args.augment:  # generate more training data through augmentation
     synthetic_images = utils.augment_images(synthetic_images)
-    val_images = utils.augment_images(val_images)
     real_images = utils.augment_images(real_images)
 
 synth_crops = utils.random_crop_generator(synthetic_images, args.crop_size, args.batch_size)
-val_crops = utils.random_crop_generator(val_images, args.crop_size, args.batch_size)
 real_crops = utils.random_crop_generator(real_images, args.crop_size, args.batch_size)
 
 # select optimizer to use during training
@@ -174,6 +172,7 @@ def train():
             print('Saving weights of refiner and discriminator model...')
             sim_gan.refiner.save_weights(weights_path+'discriminator.latest.hdf5', save_format='h5')
             sim_gan.discriminator.save_weights(weights_path+'refiner.latest.hdf5', save_format='h5')
+
 
 if __name__ == '__main__':
     train()
