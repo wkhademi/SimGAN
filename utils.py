@@ -7,7 +7,7 @@ def load_data(path, include_val=False):
     images = []
     val_images = []
 
-    im = Image.open(args.path)
+    im = Image.open(path)
     print('%d images'%im.n_frames)
 
     step = im.n_frames//1000
@@ -22,19 +22,21 @@ def load_data(path, include_val=False):
         else:
             images.append(im.crop())
 
-        images = np.stack(images)
-        val_images = np.stack(val_images)
+    images = np.stack(images)
+    val_images = np.stack(val_images)
 
     if include_val:  # used for loading in the simulated train/val split data
         return images, val_images
     else:  # used for loading in the real images
-        images = np.concatenate(images, val_images)
+        images = np.concatenate([images, val_images])
         val_images = []
         return images, val_images
 
 
 def random_crop_generator(data, crop_size, batch_size):
     while True:
+        if len(data.shape) != 4:
+            data = np.expand_dims(data, -1)
         inds = np.random.randint(data.shape[0], size=batch_size)
         y = np.random.randint(data.shape[1]-crop_size, size=batch_size)
         x = np.random.randint(data.shape[2]-crop_size, size=batch_size)

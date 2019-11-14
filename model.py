@@ -1,3 +1,4 @@
+import keras.backend as K
 import tensorflow as tf
 from keras import Input, Model
 from keras.optimizers import SGD
@@ -40,7 +41,7 @@ class SimGAN:
         """
         Refiner network of SimGAN meant for images of input size 224x224.
         """
-        def resnet_block(self, inputs):
+        def resnet_block(inputs):
             """
             ResNet Block with skip connection.
             """

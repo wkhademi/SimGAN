@@ -1,5 +1,7 @@
+import os
 import utils
 import argparse
+import numpy as np
 import tensorflow as tf
 import keras.backend as K
 from model import SimGAN
@@ -65,7 +67,7 @@ if args.optimizer.lower() == 'sgd':
     optimizer = SGD(args.lr, momentum=0.9)
 elif args.optimizer.lower() == 'adam':
     optimizer = Adam(args.lr, amsgrad=True)
-else
+else:
     raise ValueError('Not a valid optimizer. Choose between SGD or Adam.')
 
 # build SimGAN model
@@ -80,10 +82,10 @@ image_buffer = ImageBuffer(args.buffersize)
 weights_path = '%s/weights.SimGAN.'%expdir
 
 # create ground truth labels for discriminator
-labels_shape = tuple([args.batch_size] + sim_gan.discriminator.output_shape[1:])
+labels_shape = tuple([args.batch_size] + list(sim_gan.discriminator.output_shape[1:]))
 synth_labels = np.zeros(labels_shape, dtype=np.float32)
 synth_labels[:,:,:,1] = 1.0
-real_labels = np.zeros(lables_shape, dtype=np.float32)
+real_labels = np.zeros(labels_shape, dtype=np.float32)
 real_labels[:,:,:,0] = 1.0
 
 
@@ -104,7 +106,7 @@ def train():
             # save refiner model weights every 25 steps
             if i % 25 == 0:
                 print('Saving weights of refiner model...')
-                sim_gan.refiner.save_weights(weights_path+'refiner.latest.hdf5', save_format='h5')
+                sim_gan.refiner.save_weights(weights_path+'refiner.latest.hdf5')
     else:
         print('Loading in weights for refiner model...')
         sim_gan.refiner.load_weights(args.refiner_model_path)
@@ -128,25 +130,25 @@ def train():
             # save discriminator model weights every 25 steps
             if i % 25 == 0:
                 print('Saving weights of discriminator model...')
-                sim_gan.discriminator.save_weights(weights_path+'discriminator.latest.hdf5', save_format='h5')
+                sim_gan.discriminator.save_weights(weights_path+'discriminator.latest.hdf5')
     else:
         print('Loading in weights for discriminator model...')
         sim_gan.discriminator.load_weights(args.discriminator_model_path)
 
     # training procedure defined in Algorithm 1
     for step in range(args.max_steps):
-        for i in range(args.k_g):
+        for i in range(args.K_g):
             refiner_inputs, _ = next(synth_crops)
             adversarial_loss = sim_gan.adversarial.train_on_batch(refiner_inputs, y=[refiner_inputs, real_labels])
 
-            print('Step {} - Adversarial loss: {}'.format(args.k_g*step+i, adversarial_loss))
+            print('Step {} - Adversarial loss: {}'.format(args.K_g*step+i, adversarial_loss))
 
-        for i in range(args.k_d):
+        for i in range(args.K_d):
             # train discriminator on batch of real images
             real_inputs, _ = next(real_crops)
             discrim_real_loss = sim_gan.discriminator.train_on_batch(real_inputs, y=real_labels)
 
-            print('Step {} - Discriminator loss w/ real images: {}'.format(args.k_d*step+i, discrim_real_loss))
+            print('Step {} - Discriminator loss w/ real images: {}'.format(args.K_d*step+i, discrim_real_loss))
 
             # train discriminator on batch of refined images
             refiner_inputs, _ = next(synth_crops)
@@ -170,8 +172,8 @@ def train():
         # save discriminator and refiner weights every 25 steps
         if step % 25 == 0:
             print('Saving weights of refiner and discriminator model...')
-            sim_gan.refiner.save_weights(weights_path+'discriminator.latest.hdf5', save_format='h5')
-            sim_gan.discriminator.save_weights(weights_path+'refiner.latest.hdf5', save_format='h5')
+            sim_gan.refiner.save_weights(weights_path+'discriminator.latest.hdf5')
+            sim_gan.discriminator.save_weights(weights_path+'refiner.latest.hdf5')
 
 
 if __name__ == '__main__':
