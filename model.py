@@ -16,7 +16,7 @@ class SimGAN:
 
         # build discriminator network
         self.discriminator = self.discriminator_network(input_shape)
-        self.discriminator.compile(loss='categorical_crossentropy', optimizer=optimizer)
+        self.discriminator.compile(loss=tf.losses.softmax_cross_entropy, optimizer=optimizer)
 
         # disable training for discriminator when training refiner
         self.discriminator.trainable = False
@@ -33,7 +33,7 @@ class SimGAN:
         # build adversarial network
         self.adversarial = Model(inputs=inputs, outputs=[refined_inputs, refined_probs],
                                  name='adversarial_model')
-        self.adversarial.compile(loss=[self.self_regularization_loss, 'categorical_crossentropy'],
+        self.adversarial.compile(loss=[self.self_regularization_loss, tf.losses.softmax_cross_entropy],
                                  optimizer=optimizer)
 
 
@@ -76,7 +76,8 @@ class SimGAN:
         net = Conv2D(32, 3, strides=2, padding='same', activation='relu')(net)
         net = Conv2D(32, 1, strides=1, activation='relu')(net)
 
-        output_map = Conv2D(2, 1, strides=1, activation='softmax')(net)
+        output_map = Conv2D(2, 1, strides=1)(net)
+        output_map = Reshape(-1, 2)(output_map)  # reshape to [batch, H*W, C] for proper softmax crossentropy
 
         return Model(inputs=inputs, outputs=output_map, name='discriminator')
 
