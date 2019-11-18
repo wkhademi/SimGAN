@@ -1,6 +1,7 @@
 import os
 import utils
 import argparse
+import numpy as np
 import tensorflow as tf
 import keras.backend as K
 from tqdm import tqdm
@@ -54,6 +55,7 @@ if os.path.exists(refined_path):
 
 def test():
     for count, im in tqdm(enumerate(test_images)):
+        im = np.reshape(im, (1, im.shape[0], im.shape[1], 1))
         out = sim_gan.refiner.predict(im)  # refine a single simulated image
         refined_image = np.squeeze((out + 1) / 2.) # shift output image from [-1, 1] to [0, 1]
         simulated_image = np.squeeze(im)

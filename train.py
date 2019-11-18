@@ -1,5 +1,6 @@
 import os
 import utils
+import random
 import argparse
 import numpy as np
 import tensorflow as tf
@@ -152,15 +153,13 @@ def train():
 
             # train discriminator on batch of refined images
             refiner_inputs, _ = next(synth_crops)
+            refined_inputs = sim_gan.refiner.predict_on_batch(refiner_inputs)
 
             # only mix in old refined images when buffer has filled up
             if len(image_buffer) == args.buffersize:
                 old_refined_inputs = image_buffer.fetch(args.batch_size//2)
-                indices = random.sample(range(0, args.batch_size), arg.batch_size//2)
-                mixed_refined_inputs = np.concatenate(old_refined_inputs, refiner_inputs[indices])
-                refined_inputs = sim_gan.refiner.predict_on_batch(mixed_refiner_inputs)
-            else:
-                refined_inputs = sim_gan.refiner.predict_on_batch(refiner_inputs)
+                indices = random.sample(range(0, args.batch_size), args.batch_size//2)
+                refined_inputs = np.concatenate([old_refined_inputs, refined_inputs[indices]])
 
             discrim_refined_loss = sim_gan.discriminator.train_on_batch(refined_inputs, y=synth_labels)
 
@@ -172,8 +171,8 @@ def train():
         # save discriminator and refiner weights every 25 steps
         if step % 25 == 0:
             print('Saving weights of refiner and discriminator model...')
-            sim_gan.refiner.save_weights(weights_path+'discriminator.latest.hdf5')
-            sim_gan.discriminator.save_weights(weights_path+'refiner.latest.hdf5')
+            sim_gan.refiner.save_weights(weights_path+'refiner.latest.hdf5')
+            sim_gan.discriminator.save_weights(weights_path+'discriminator.latest.hdf5')
 
 
 if __name__ == '__main__':

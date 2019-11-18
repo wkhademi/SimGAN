@@ -1,2 +1,3 @@
-YFPdata3.tif
+*.tif
+*.pyc
 experiments/
