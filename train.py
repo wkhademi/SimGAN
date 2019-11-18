@@ -17,22 +17,22 @@ K.set_session(sess)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('name')
-parser.add_argument('--synthetic_path', required=True)
-parser.add_argument('--real_path', required=True)
-parser.add_argument('--refiner_model_path', type=str, default=None)
-parser.add_argument('--discriminator_model_path', type=str, default=None)
+parser.add_argument('--synthetic_path', required=True, help='path to simulated tiff data')
+parser.add_argument('--real_path', required=True, help='path to real tiff data')
+parser.add_argument('--refiner_model_path', type=str, default=None, help='path to trained refiner weights')
+parser.add_argument('--discriminator_model_path', type=str, default=None, help='path to trained discriminator weights')
 parser.add_argument('--optimizer', type=str, default='sgd')
 parser.add_argument('--lr', type=float, default=2e-4)
 parser.add_argument('--batch_size', type=int, default=4)
 parser.add_argument('--crop_size', type=int, default=256)
 parser.add_argument('--augment', action='store_true')
-parser.add_argument('--lambda_reg', type=float, default=10.0)
+parser.add_argument('--lambda_reg', type=float, default=10.0, help='scalar for self regularization loss')
 parser.add_argument('--refine_steps', type=int, default=500)
 parser.add_argument('--discrim_steps', type=int, default=200)
 parser.add_argument('--max_steps', type=int, default=1000)
 parser.add_argument('--K_g', type=int, default=2)
 parser.add_argument('--K_d', type=int, default=1)
-parser.add_argument('--buffersize', type=int, default=512)
+parser.add_argument('--buffersize', type=int, default=512, help='size of image history buffer')
 
 args = parser.parse_args()
 
@@ -85,9 +85,9 @@ weights_path = '%s/weights.SimGAN.'%expdir
 # create ground truth labels for discriminator
 labels_shape = tuple([args.batch_size] + list(sim_gan.discriminator.output_shape[1:]))
 synth_labels = np.zeros(labels_shape, dtype=np.float32)
-synth_labels[:,:,:,1] = 1.0
+synth_labels[:,:,1] = 1.0
 real_labels = np.zeros(labels_shape, dtype=np.float32)
-real_labels[:,:,:,0] = 1.0
+real_labels[:,:,0] = 1.0
 
 
 def train():
@@ -163,7 +163,7 @@ def train():
 
             discrim_refined_loss = sim_gan.discriminator.train_on_batch(refined_inputs, y=synth_labels)
 
-            print('Step {} - Discriminator loss w/ refined images: {}'.format(i, discrim_refined_loss))
+            print('Step {} - Discriminator loss w/ refined images: {}'.format(args.K_d*step+i, discrim_refined_loss))
 
             # update image buffer with the newly refined images
             image_buffer.update(refined_inputs)
