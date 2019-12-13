@@ -2,7 +2,7 @@ import keras.backend as K
 import tensorflow as tf
 from keras import Input, Model
 from keras.optimizers import SGD
-from keras.layers import Conv2D, ReLU, MaxPool2D, Reshape, Add
+from keras.layers import Conv2D, ReLU, MaxPool2D, BatchNormalization, Reshape, Add
 
 
 class SimGAN:
@@ -11,12 +11,16 @@ class SimGAN:
 
     Details can be found here: https://arxiv.org/pdf/1612.07828.pdf
     """
-    def __init__(self, input_shape, optimizer=SGD(2e-4, momentum=0.9), lambda_reg=10.0):
+    def __init__(self, input_shape, optimizer=SGD(2e-4, momentum=0.9), lambda_reg=10.0, train_mean=0.0, train_std=0.0):
+        self.max_val = 2**14 - 1
         self.lambda_reg = lambda_reg
+        self.train_mean = train_mean
+        self.train_std = train_std
 
         # build discriminator network
         self.discriminator = self.discriminator_network(input_shape)
-        self.discriminator.compile(loss=tf.losses.softmax_cross_entropy, optimizer=optimizer)
+        self.discriminator.compile(loss=self.local_discrim_loss, optimizer=optimizer)
+        self.discriminator.summary()
 
         # disable training for discriminator when training refiner
         self.discriminator.trainable = False
@@ -24,6 +28,7 @@ class SimGAN:
         # build refiner network
         self.refiner = self.refiner_network(input_shape)
         self.refiner.compile(loss=self.self_regularization_loss, optimizer=optimizer)
+        self.refiner.summary()
 
         # refine a set of synthetic images and run them through the discriminator
         inputs = Input(shape=input_shape)
@@ -33,8 +38,9 @@ class SimGAN:
         # build adversarial network
         self.adversarial = Model(inputs=inputs, outputs=[refined_inputs, refined_probs],
                                  name='adversarial_model')
-        self.adversarial.compile(loss=[self.self_regularization_loss, tf.losses.softmax_cross_entropy],
+        self.adversarial.compile(loss=[self.self_regularization_loss, self.local_discrim_loss],
                                  optimizer=optimizer)
+        self.adversarial.summary()
 
 
     def refiner_network(self, refiner_input_shape):
@@ -46,15 +52,18 @@ class SimGAN:
             ResNet Block with skip connection.
             """
             x = Conv2D(64, 3, strides=1, padding='same', activation='relu')(inputs)
+            x = BatchNormalization()(x)
             x = Conv2D(64, 3, strides=1, padding='same')(x)
             skip = Add()([x, inputs])
             out = ReLU()(skip)
+            out = BatchNormalization()(out)
 
             return out
 
         inputs = Input(shape=refiner_input_shape)
 
         net = Conv2D(64, 7, strides=1, padding='same', activation='relu')(inputs)
+        net = BatchNormalization()(net)
 
         for _ in range(10):
             net = resnet_block(net)
@@ -71,13 +80,19 @@ class SimGAN:
         inputs = Input(shape=discriminator_input_shape)
 
         net = Conv2D(96, 7, strides=4, padding='same', activation='relu')(inputs)
+        net = BatchNormalization()(net)
         net = Conv2D(64, 5, strides=2, padding='same', activation='relu')(net)
-        net = MaxPool2D(pool_size=3, strides=2, padding='same')(net)
+        net = BatchNormalization()(net)
+        #net = MaxPool2D(pool_size=3, strides=2, padding='same')(net)
+        net = Conv2D(64, 3, strides=2, padding='same', activation='relu')(net)
+        net = BatchNormalization()(net)
         net = Conv2D(32, 3, strides=2, padding='same', activation='relu')(net)
+        net = BatchNormalization()(net)
         net = Conv2D(32, 1, strides=1, activation='relu')(net)
+        net = BatchNormalization()(net)
 
         output_map = Conv2D(2, 1, strides=1)(net)
-        output_map = Reshape(-1, 2)(output_map)  # reshape to [batch, H*W, C] for proper softmax crossentropy
+        output_map = Reshape((-1, 2))(output_map)  # reshape to [batch, H*W, C] for proper softmax crossentropy
 
         return Model(inputs=inputs, outputs=output_map, name='discriminator')
 
@@ -102,6 +117,14 @@ class SimGAN:
     #
     #     return realism_loss + regularizer_loss
 
+    def local_discrim_loss(self, y_true, y):
+        y = K.reshape(y, (-1, 2))
+        y_true = K.reshape(y_true, (-1, 2))
+
+        loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=y_true, logits=y))
+
+        return loss
+
 
     def self_regularization_loss(self, x, R_x):
         """
@@ -110,6 +133,9 @@ class SimGAN:
         This loss helps to preserve the structure of the original simulated image
         while refining it.
         """
-        l1_norm = K.mean(K.abs(R_x - x))
+        refined = ((self.max_val * ((R_x + 1.) / 2.)) - self.train_mean) / self.train_std
+
+        #l1_norm = K.sum(K.abs(refined - x))
+        l1_norm = K.mean(K.abs(refined - x))
 
         return self.lambda_reg * l1_norm

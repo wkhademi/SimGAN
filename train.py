@@ -1,4 +1,5 @@
 import os
+import sys
 import utils
 import random
 import argparse
@@ -26,7 +27,7 @@ parser.add_argument('--lr', type=float, default=2e-4)
 parser.add_argument('--batch_size', type=int, default=4)
 parser.add_argument('--crop_size', type=int, default=256)
 parser.add_argument('--augment', action='store_true')
-parser.add_argument('--lambda_reg', type=float, default=10.0, help='scalar for self regularization loss')
+parser.add_argument('--lambda_reg', type=float, default=1e-3, help='scalar for self regularization loss')
 parser.add_argument('--refine_steps', type=int, default=500)
 parser.add_argument('--discrim_steps', type=int, default=200)
 parser.add_argument('--max_steps', type=int, default=1000)
@@ -52,16 +53,20 @@ np.savez(mean_std_path,train_mean=train_mean,train_std=train_std)
 synthetic_images = (synthetic_images - train_mean) / train_std
 
 # normalize real images to be between -1 and 1 for discriminator
-MAXVAL = 1.
-MINVAL = 0.
-real_images = 2*((real_images - MINVAL) / (MAXVAL - MINVAL)) - 1
+#MAXVAL = 2**14 - 1 
+max_val = np.amax(real_images, axis=(1,2), keepdims=True)
+real_images = (real_images / max_val) - np.mean(real_images / max_val, axis=(1,2), keepdims=True)
 
 if args.augment:  # generate more training data through augmentation
     synthetic_images = utils.augment_images(synthetic_images)
     real_images = utils.augment_images(real_images)
 
-synth_crops = utils.random_crop_generator(synthetic_images, args.crop_size, args.batch_size)
-real_crops = utils.random_crop_generator(real_images, args.crop_size, args.batch_size)
+#synth_crops = utils.random_crop_generator(synthetic_images, args.crop_size, args.batch_size)
+#real_crops = utils.random_crop_generator(real_images, args.crop_size, args.batch_size)
+#synth_crops = utils.center_crop_generator(synthetic_images, args.crop_size, args.batch_size)
+#real_crops = utils.center_crop_generator(real_images, args.crop_size, args.batch_size)
+synth_crops = utils.random_generator(synthetic_images, args.batch_size)
+real_crops = utils.random_generator(real_images, args.batch_size)
 
 # select optimizer to use during training
 if args.optimizer.lower() == 'sgd':
@@ -72,9 +77,13 @@ else:
     raise ValueError('Not a valid optimizer. Choose between SGD or Adam.')
 
 # build SimGAN model
-sim_gan = SimGAN(input_shape=(args.crop_size, args.crop_size, 1),
+#sim_gan = SimGAN(input_shape=(args.crop_size, args.crop_size, 1),
+height, width = real_images.shape[1], real_images.shape[2]
+sim_gan = SimGAN(input_shape=(height, width, 1),
                  optimizer=optimizer,
-                 lambda_reg=args.lambda_reg)
+                 lambda_reg=args.lambda_reg,
+                 train_mean=train_mean,
+                 train_std=train_std)
 
 # create image buffer for storing a history of refined images
 image_buffer = ImageBuffer(args.buffersize)
@@ -159,9 +168,10 @@ def train():
             if len(image_buffer) == args.buffersize:
                 old_refined_inputs = image_buffer.fetch(args.batch_size//2)
                 indices = random.sample(range(0, args.batch_size), args.batch_size//2)
-                refined_inputs = np.concatenate([old_refined_inputs, refined_inputs[indices]])
-
-            discrim_refined_loss = sim_gan.discriminator.train_on_batch(refined_inputs, y=synth_labels)
+                mixed_inputs = np.concatenate([old_refined_inputs, refined_inputs[indices]])
+                discrim_refined_loss = sim_gan.discriminator.train_on_batch(mixed_inputs, y=synth_labels)
+            else:
+                discrim_refined_loss = sim_gan.discriminator.train_on_batch(refined_inputs, y=synth_labels)
 
             print('Step {} - Discriminator loss w/ refined images: {}'.format(args.K_d*step+i, discrim_refined_loss))
 

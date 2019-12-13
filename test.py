@@ -52,12 +52,17 @@ if os.path.exists(simulated_path):
 if os.path.exists(refined_path):
     os.remove(refined_path)
 
+MAX_VAL = 2**14 - 1
+
 
 def test():
-    for count, im in tqdm(enumerate(test_images)):
+    for count in tqdm(range(len(test_images))):
+        im = test_images[count]
         im = np.reshape(im, (1, im.shape[0], im.shape[1], 1))
         out = sim_gan.refiner.predict(im)  # refine a single simulated image
-        refined_image = np.squeeze((out + 1) / 2.) # shift output image from [-1, 1] to [0, 1]
+        print(out)
+        refined_image = MAX_VAL * np.squeeze((out + 1) / 2.) # shift output image from [-1, 1] to [0, MAX_VAL]
+        print(np.max(refined_image))
         simulated_image = np.squeeze(im)
 
         simulated = Image.fromarray(simulated_image.astype(np.uint16))

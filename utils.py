@@ -51,9 +51,32 @@ def center_crop_generator(data, crop_size, batch_size):
     y = data.shape[1]//2-crop_size//2
     x = data.shape[2]//2-crop_size//2
     while True:
-        for n in range(0,len(data),batch_size):
-            batch = data[n:n+batch_size,y:y+crop_size,x:x+crop_size]
-            yield batch, None
+        if len(data.shape) != 4:
+            data = np.expand_dims(data, -1)
+
+        inds = np.random.randint(data.shape[0], size=batch_size)
+        batch = np.zeros((batch_size, crop_size, crop_size, 1), dtype=data.dtype)
+
+        #for n in range(0,len(data),batch_size):
+        #    batch = data[n:n+batch_size,y:y+crop_size,x:x+crop_size]
+        #    yield batch, None
+
+        for i, ind, in enumerate(inds):
+            batch[i] = data[ind,y:y+crop_size,x:x+crop_size]
+        yield batch, None
+
+
+def random_generator(data, batch_size):
+   while True:
+      if len(data.shape) != 4:
+         data = np.expand_dims(data, -1)
+
+      inds = np.arange(0, len(data))
+      np.random.shuffle(inds)
+
+      for n in range(0,len(data),batch_size):
+         batch = data[inds[n:n+batch_size]]
+         yield batch, None
 
 
 def augment_images(images):
